@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import relationship, backref
@@ -30,6 +30,14 @@ class Role(BaseModel):
     user = relationship('User')
 
 
+group_profile_table = Table(
+    'group_profile',
+    BaseModel.metadata,
+    Column('group_id', Integer, ForeignKey('group.id')),
+    Column('profile_id', Integer, ForeignKey('profile.id'))
+)
+
+
 class Profile(BaseModel):
     __tablename__ = 'profile'
     id = Column(Integer, primary_key=True)
@@ -43,6 +51,11 @@ class Profile(BaseModel):
         backref=backref('profile', uselist=False,
                         cascade='all, delete-orphan'),
     )
+
+    groups = relationship(
+        "Group",
+        secondary=group_profile_table,
+        back_populates="members")
 
     def __init__(self, nickname=None, the_user=None, **kwargs):
         if nickname is not None and "name" not in kwargs:
@@ -94,25 +107,11 @@ class Group(BaseModel):
     id = Column(Integer, primary_key=True)
     name = Column(String(150), nullable=False)
 
+    members = relationship(
+        "Profile",
+        secondary=group_profile_table,
+        back_populates="groups")
 
-class GroupMember(BaseModel):
-    __tablename__ = 'group_member'
-    id = Column(Integer, primary_key=True)
-    group_id = Column(
-        ForeignKey('group.id', deferrable=True, initially='DEFERRED'),
-        nullable=False, index=True)
-    profile_id = Column(
-        ForeignKey('profile.id', deferrable=True, initially='DEFERRED'),
-        nullable=False, index=True)
-
-    group = relationship(
-        'Group',
-        backref=backref('members', cascade='all, delete-orphan'),
-    )
-    profile = relationship(
-        'Profile',
-        backref=backref('groups', lazy='dynamic'),
-    )
 
 class Genre(BaseModel):
     __tablename__ = 'genre'
@@ -354,8 +353,8 @@ def test_2many(session):
     sqla_yaml_fixtures.load(BaseModel, session, fixture)
     groups = session.query(Group).all()
     assert len(groups) == 1
-    assert groups[0].members[0].profile.name == 'Jeffrey'
-    assert groups[0].members[0].profile.groups[0].group.name == 'Ramones'
+    assert groups[0].members[0].name == 'Jeffrey'
+    assert groups[0].members[0].groups[0].name == 'Ramones'
 
 
 def test_2many_no_backref(session):
@@ -375,6 +374,23 @@ def test_2many_no_backref(session):
     assert roles[0].user_id == data.get('joey').id
 
 
+def test_2many_works(session):
+    fixture = """
+- Profile:
+  - __key__: jeffrey
+    name: Jeffrey
+    user_id: 1
+
+- Group:
+  - name: Ramones
+    members: [jeffrey]
+"""
+    sqla_yaml_fixtures.load(BaseModel, session, fixture)
+    group = session.query(Group).filter_by(name="Ramones").one()
+    assert len(group.members) == 1
+    assert group.members[0].name == "Jeffrey"
+
+
 def test_2many_invalid_ref(session):
     fixture = """
 - User:
@@ -390,9 +406,8 @@ def test_2many_invalid_ref(session):
 """
     with pytest.raises(Exception) as exc_info:
         sqla_yaml_fixtures.load(BaseModel, session, fixture)
-    assert 'Group' in str(exc_info)
-    assert 'members' in str(exc_info)
-    assert 'joey' in str(exc_info)
+    assert 'KeyError' in str(exc_info)
+    assert 'groups' in str(exc_info)
 
 
 def test_2many_empty_is_ok(session):

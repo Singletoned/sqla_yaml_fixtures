@@ -118,11 +118,7 @@ def _create_obj(ModelBase, session, store,
                     continue  # empty list
                 # if list element are string they are references
                 if isinstance(value[0], str):
-                    tgt_model_name = store.get(value[0]).__class__.__name__
-                    rel_model = ModelBase._decl_class_registry[rel_name]
-                    col_name = _get_rel_col_for(rel_model, tgt_model_name)
-                    refs = [rel_model(**{col_name: store.get(v)})
-                            for v in value]
+                    refs = [store.get(v) for v in value]
                     many.append((name, refs))
 
                 # else they are a list of nested elements

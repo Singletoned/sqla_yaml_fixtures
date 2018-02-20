@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, backref
 
@@ -9,6 +9,14 @@ class User(BaseModel):
     id = Column(Integer, primary_key=True)
     username = Column(String(150), nullable=False, unique=True)
     email = Column(String(254), unique=True)
+
+
+group_profile_table = Table(
+    'group_profile',
+    BaseModel.metadata,
+    Column('group_id', Integer, ForeignKey('group.id')),
+    Column('profile_id', Integer, ForeignKey('profile.id'))
+)
 
 
 class Profile(BaseModel):
@@ -24,6 +32,10 @@ class Profile(BaseModel):
         backref=backref('profile', uselist=False,
                         cascade='all, delete-orphan'),
     )
+    groups = relationship(
+        "Group",
+        secondary=group_profile_table,
+        back_populates="members")
 
     def __init__(self, nickname=None, the_user=None, **kwargs):
         if nickname is not None and "name" not in kwargs:
@@ -38,23 +50,7 @@ class Group(BaseModel):
     id = Column(Integer, primary_key=True)
     name = Column(String(150), nullable=False)
 
-
-class GroupMember(BaseModel):
-    __tablename__ = 'group_member'
-    id = Column(Integer, primary_key=True)
-    group_id = Column(
-        ForeignKey('group.id', deferrable=True, initially='DEFERRED'),
-        nullable=False, index=True)
-    profile_id = Column(
-        ForeignKey('profile.id', deferrable=True, initially='DEFERRED'),
-        nullable=False, index=True)
-
-    group = relationship(
-        'Group',
-        backref=backref('members', cascade='all, delete-orphan'),
-    )
-    profile = relationship(
-        'Profile',
-        backref=backref('groups', lazy='dynamic'),
-    )
-
+    members = relationship(
+        "Profile",
+        secondary=group_profile_table,
+        back_populates="groups")

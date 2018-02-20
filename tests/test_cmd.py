@@ -38,7 +38,7 @@ def test_sample():
     assert len(users) == 2
     assert users[0].username == 'joey'
     assert users[1].username == 'deedee'
-    assert users[0].profile.groups[0].group.name == 'Ramones'
+    assert users[0].profile.groups[0].name == 'Ramones'
     assert users[0].profile.name == 'Jeffrey'
 
     profiles = session.query(Profile).all()
